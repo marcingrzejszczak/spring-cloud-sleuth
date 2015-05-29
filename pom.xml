@@ -111,6 +111,11 @@
 				<version>1.12.6</version>
 				<scope>provided</scope>
 			</dependency>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-starter-hystrix</artifactId>
+				<version>${spring-cloud.version}</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
