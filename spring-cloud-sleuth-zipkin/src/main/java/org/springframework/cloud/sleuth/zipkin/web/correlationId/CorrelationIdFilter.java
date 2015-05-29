@@ -30,109 +30,109 @@ import static org.springframework.util.StringUtils.hasText;
  * @see MDC
  */
 public class CorrelationIdFilter extends OncePerRequestFilter {
-    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-    public static final Pattern DEFAULT_SKIP_PATTERN = Pattern.compile("/api-docs.*|/autoconfig|/configprops|/dump|/info|/metrics.*|/mappings|/trace|/swagger.*|.*\\.png|.*\\.css|.*\\.js|.*\\.html");
+	private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+	public static final Pattern DEFAULT_SKIP_PATTERN = Pattern.compile("/api-docs.*|/autoconfig|/configprops|/dump|/info|/metrics.*|/mappings|/trace|/swagger.*|.*\\.png|.*\\.css|.*\\.js|.*\\.html");
 
-    private final Optional<Pattern> skipCorrId;
-    private final UuidGenerator uuidGenerator;
+	private final Optional<Pattern> skipCorrId;
+	private final UuidGenerator uuidGenerator;
 
-    public CorrelationIdFilter() {
-        this.uuidGenerator = new UuidGenerator();
-        this.skipCorrId = Optional.absent();
-    }
+	public CorrelationIdFilter() {
+		this.uuidGenerator = new UuidGenerator();
+		this.skipCorrId = Optional.absent();
+	}
 
-    public CorrelationIdFilter(UuidGenerator uuidGenerator, Pattern skipCorrId) {
-        this.uuidGenerator = uuidGenerator;
-        this.skipCorrId = Optional.of(skipCorrId);
-    }
+	public CorrelationIdFilter(UuidGenerator uuidGenerator, Pattern skipCorrId) {
+		this.uuidGenerator = uuidGenerator;
+		this.skipCorrId = Optional.of(skipCorrId);
+	}
 
-    @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        setupCorrelationId(request, response);
-        try {
-            filterChain.doFilter(request, response);
-        } finally {
-            cleanupCorrelationId();
-        }
-    }
+	@Override
+	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+		setupCorrelationId(request, response);
+		try {
+			filterChain.doFilter(request, response);
+		} finally {
+			cleanupCorrelationId();
+		}
+	}
 
-    private void setupCorrelationId(HttpServletRequest request, HttpServletResponse response) {
-        String correlationIdFromRequest = getCorrelationIdFrom(request);
-        String correlationId = (hasText(correlationIdFromRequest)) ? correlationIdFromRequest : getCorrelationIdFrom(response);
-        if (!hasText(correlationId) && shouldGenerateCorrId(request)) {
-            correlationId = createNewCorrIdIfEmpty();
-        }
-        CorrelationIdHolder.set(correlationId);
-        addCorrelationIdToResponseIfNotPresent(response, correlationId);
-    }
+	private void setupCorrelationId(HttpServletRequest request, HttpServletResponse response) {
+		String correlationIdFromRequest = getCorrelationIdFrom(request);
+		String correlationId = (hasText(correlationIdFromRequest)) ? correlationIdFromRequest : getCorrelationIdFrom(response);
+		if (!hasText(correlationId) && shouldGenerateCorrId(request)) {
+			correlationId = createNewCorrIdIfEmpty();
+		}
+		CorrelationIdHolder.set(correlationId);
+		addCorrelationIdToResponseIfNotPresent(response, correlationId);
+	}
 
-    private String getCorrelationIdFrom(final HttpServletResponse response) {
-        return withLoggingAs("response", new Callable<String>() {
-            @Override
-            public String call() throws Exception {
-                return response.getHeader(CORRELATION_ID_HEADER);
-            }
-        });
-    }
+	private String getCorrelationIdFrom(final HttpServletResponse response) {
+		return withLoggingAs("response", new Callable<String>() {
+			@Override
+			public String call() throws Exception {
+				return response.getHeader(CORRELATION_ID_HEADER);
+			}
+		});
+	}
 
-    private String getCorrelationIdFrom(final HttpServletRequest request) {
-        return withLoggingAs("request", new Callable<String>() {
-            @Override
-            public String call() throws Exception {
-                return request.getHeader(CORRELATION_ID_HEADER);
-            }
-        });
-    }
+	private String getCorrelationIdFrom(final HttpServletRequest request) {
+		return withLoggingAs("request", new Callable<String>() {
+			@Override
+			public String call() throws Exception {
+				return request.getHeader(CORRELATION_ID_HEADER);
+			}
+		});
+	}
 
-    private String withLoggingAs(String whereWasFound, Callable<String> correlationIdGetter) {
-        String correlationId = tryToGetCorrelationId(correlationIdGetter);
-        if (hasText(correlationId)) {
-            MDC.put(CORRELATION_ID_HEADER, correlationId);
-            log.debug("Found correlationId in " + whereWasFound + ": " + correlationId);
-        }
-        return correlationId;
-    }
+	private String withLoggingAs(String whereWasFound, Callable<String> correlationIdGetter) {
+		String correlationId = tryToGetCorrelationId(correlationIdGetter);
+		if (hasText(correlationId)) {
+			MDC.put(CORRELATION_ID_HEADER, correlationId);
+			log.debug("Found correlationId in " + whereWasFound + ": " + correlationId);
+		}
+		return correlationId;
+	}
 
-    private String tryToGetCorrelationId(Callable<String> correlationIdGetter) {
-        try {
-            return correlationIdGetter.call();
-        } catch (Exception e) {
-            log.error("Exception occurred while trying to retrieve request header", e);
-            return "";
-        }
-    }
+	private String tryToGetCorrelationId(Callable<String> correlationIdGetter) {
+		try {
+			return correlationIdGetter.call();
+		} catch (Exception e) {
+			log.error("Exception occurred while trying to retrieve request header", e);
+			return "";
+		}
+	}
 
-    private String createNewCorrIdIfEmpty() {
-        String currentCorrId = uuidGenerator.create();
-        MDC.put(CORRELATION_ID_HEADER, currentCorrId);
-        log.debug("Generating new correlationId: " + currentCorrId);
-        return currentCorrId;
-    }
+	private String createNewCorrIdIfEmpty() {
+		String currentCorrId = uuidGenerator.create();
+		MDC.put(CORRELATION_ID_HEADER, currentCorrId);
+		log.debug("Generating new correlationId: " + currentCorrId);
+		return currentCorrId;
+	}
 
-    protected boolean shouldGenerateCorrId(HttpServletRequest request) {
-        final String i = request.getRequestURI();
-        final String uri = StringUtils.defaultIfEmpty(i, StringUtils.EMPTY);
-        boolean skip = skipCorrId.transform(new Function<Pattern, Boolean>() {
-            public Boolean apply(Pattern skipPattern) {
-                return skipPattern.matcher(uri).matches();
-            }
-        }).or(false);
-        return !skip;
-    }
+	protected boolean shouldGenerateCorrId(HttpServletRequest request) {
+		final String i = request.getRequestURI();
+		final String uri = StringUtils.defaultIfEmpty(i, StringUtils.EMPTY);
+		boolean skip = skipCorrId.transform(new Function<Pattern, Boolean>() {
+			public Boolean apply(Pattern skipPattern) {
+				return skipPattern.matcher(uri).matches();
+			}
+		}).or(false);
+		return !skip;
+	}
 
-    private void addCorrelationIdToResponseIfNotPresent(HttpServletResponse response, String correlationId) {
-        if (!hasText(response.getHeader(CORRELATION_ID_HEADER))) {
-            response.addHeader(CORRELATION_ID_HEADER, correlationId);
-        }
-    }
+	private void addCorrelationIdToResponseIfNotPresent(HttpServletResponse response, String correlationId) {
+		if (!hasText(response.getHeader(CORRELATION_ID_HEADER))) {
+			response.addHeader(CORRELATION_ID_HEADER, correlationId);
+		}
+	}
 
-    private void cleanupCorrelationId() {
-        MDC.remove(CORRELATION_ID_HEADER);
-        CorrelationIdHolder.remove();
-    }
+	private void cleanupCorrelationId() {
+		MDC.remove(CORRELATION_ID_HEADER);
+		CorrelationIdHolder.remove();
+	}
 
-    @Override
-    protected boolean shouldNotFilterAsyncDispatch() {
-        return false;
-    }
+	@Override
+	protected boolean shouldNotFilterAsyncDispatch() {
+		return false;
+	}
 }

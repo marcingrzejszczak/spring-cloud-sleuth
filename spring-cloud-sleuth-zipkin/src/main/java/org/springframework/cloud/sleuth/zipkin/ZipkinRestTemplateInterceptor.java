@@ -7,6 +7,7 @@ import com.github.kristofa.brave.client.ClientRequestInterceptor;
 import com.github.kristofa.brave.client.ClientResponseInterceptor;
 import com.google.common.base.Optional;
 import lombok.SneakyThrows;
+import org.springframework.cloud.sleuth.zipkin.web.correlationId.CorrelationIdHolder;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
@@ -33,7 +34,10 @@ public class ZipkinRestTemplateInterceptor implements ClientHttpRequestIntercept
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException {
 
-        clientRequestInterceptor.handle(new RequestAdapter(request), Optional.<String>absent());
+        RequestAdapter requestAdapter = new RequestAdapter(request);
+        clientRequestInterceptor.handle(requestAdapter, Optional.<String>absent());
+
+        appendCorrelationIdToRequestIfMissing(request, requestAdapter);
 
         ClientHttpResponse response = null;
         Exception exception = null;
@@ -48,6 +52,12 @@ public class ZipkinRestTemplateInterceptor implements ClientHttpRequestIntercept
             throw exception;
         }
         return response;
+    }
+
+    private void appendCorrelationIdToRequestIfMissing(HttpRequest request, RequestAdapter requestAdapter) {
+        if (!request.getHeaders().containsKey(CorrelationIdHolder.CORRELATION_ID_HEADER)) {
+            requestAdapter.addHeader(CorrelationIdHolder.CORRELATION_ID_HEADER, CorrelationIdHolder.get());
+        }
     }
 
     class RequestAdapter implements ClientRequestAdapter {

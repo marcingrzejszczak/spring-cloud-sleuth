@@ -4,18 +4,18 @@ package org.springframework.cloud.sleuth.zipkin.web.correlationId;
  * Component that stores correlation id using {@link ThreadLocal}
  */
 public class CorrelationIdHolder {
-    public static final String CORRELATION_ID_HEADER = "correlationId";
-    private static final ThreadLocal<String> id = new ThreadLocal<String>();
+	public static final String CORRELATION_ID_HEADER = "correlationId";
+	private static final ThreadLocal<String> id = new ThreadLocal<String>();
 
-    public static void set(String correlationId) {
-        id.set(correlationId);
-    }
+	public static void set(String correlationId) {
+		id.set(correlationId);
+	}
 
-    public static String get() {
-        return id.get();
-    }
+	public static String get() {
+		return id.get();
+	}
 
-    public static void remove() {
-        id.remove();
-    }
+	public static void remove() {
+		id.remove();
+	}
 }

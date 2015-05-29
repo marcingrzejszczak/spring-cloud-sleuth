@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-import static com.ofg.infrastructure.correlationid.CorrelationIdHolder.CORRELATION_ID_HEADER;
+import static org.springframework.cloud.sleuth.zipkin.web.correlationId.CorrelationIdHolder.CORRELATION_ID_HEADER;
 
 /**
  * Aspect that adds correlation id to
@@ -46,70 +46,70 @@ import static com.ofg.infrastructure.correlationid.CorrelationIdHolder.CORRELATI
  */
 @Aspect
 public class CorrelationIdAspect {
-    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+	private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    private static final int HTTP_ENTITY_PARAM_INDEX = 2;
+	private static final int HTTP_ENTITY_PARAM_INDEX = 2;
 
-    @Pointcut("@target(org.springframework.web.bind.annotation.RestController)")
-    private void anyRestControllerAnnotated() {
-    }
+	@Pointcut("@target(org.springframework.web.bind.annotation.RestController)")
+	private void anyRestControllerAnnotated() {
+	}
 
-    @Pointcut("@target(org.springframework.stereotype.Controller)")
-    private void anyControllerAnnotated() {
-    }
+	@Pointcut("@target(org.springframework.stereotype.Controller)")
+	private void anyControllerAnnotated() {
+	}
 
-    @Pointcut("execution(public java.util.concurrent.Callable *(..))")
-    private void anyPublicMethodReturningCallable() {
-    }
+	@Pointcut("execution(public java.util.concurrent.Callable *(..))")
+	private void anyPublicMethodReturningCallable() {
+	}
 
-    @Pointcut("(anyRestControllerAnnotated() || anyControllerAnnotated()) && anyPublicMethodReturningCallable()")
-    private void anyControllerOrRestControllerWithPublicAsyncMethod() {
-    }
+	@Pointcut("(anyRestControllerAnnotated() || anyControllerAnnotated()) && anyPublicMethodReturningCallable()")
+	private void anyControllerOrRestControllerWithPublicAsyncMethod() {
+	}
 
-    @Around("anyControllerOrRestControllerWithPublicAsyncMethod()")
-    public Object wrapWithCorrelationId(ProceedingJoinPoint pjp) throws Throwable {
-        final Callable callable = (Callable) pjp.proceed();
-        log.debug("Wrapping callable with correlation id [" + CorrelationIdHolder.get() + "]");
-        return CorrelationIdUpdater.wrapCallableWithId(new Callable() {
-            @Override
-            public Object call() throws Exception {
-                return callable.call();
-            }
-        });
-    }
+	@Around("anyControllerOrRestControllerWithPublicAsyncMethod()")
+	public Object wrapWithCorrelationId(ProceedingJoinPoint pjp) throws Throwable {
+		final Callable callable = (Callable) pjp.proceed();
+		log.debug("Wrapping callable with correlation id [" + CorrelationIdHolder.get() + "]");
+		return CorrelationIdUpdater.wrapCallableWithId(new Callable() {
+			@Override
+			public Object call() throws Exception {
+				return callable.call();
+			}
+		});
+	}
 
-    @Pointcut("execution(public * org.springframework.web.client.RestOperations.exchange(..))")
-    private void anyExchangeRestOperationsMethod() {
-    }
+	@Pointcut("execution(public * org.springframework.web.client.RestOperations.exchange(..))")
+	private void anyExchangeRestOperationsMethod() {
+	}
 
-    @Around("anyExchangeRestOperationsMethod()")
-    public Object wrapWithCorrelationIdForRestOperations(ProceedingJoinPoint pjp) throws Throwable {
-        String correlationId = CorrelationIdHolder.get();
-        log.debug("Wrapping RestTemplate call with correlation id [" + correlationId + "]");
-        HttpEntity httpEntity = (HttpEntity) pjp.getArgs()[HTTP_ENTITY_PARAM_INDEX];
-        HttpEntity newHttpEntity = createNewHttpEntity(httpEntity, correlationId);
-        List<Object> newArgs = modifyHttpEntityInMethodArguments(pjp, newHttpEntity);
-        return pjp.proceed(newArgs.toArray());
-    }
+	@Around("anyExchangeRestOperationsMethod()")
+	public Object wrapWithCorrelationIdForRestOperations(ProceedingJoinPoint pjp) throws Throwable {
+		String correlationId = CorrelationIdHolder.get();
+		log.debug("Wrapping RestTemplate call with correlation id [" + correlationId + "]");
+		HttpEntity httpEntity = (HttpEntity) pjp.getArgs()[HTTP_ENTITY_PARAM_INDEX];
+		HttpEntity newHttpEntity = createNewHttpEntity(httpEntity, correlationId);
+		List<Object> newArgs = modifyHttpEntityInMethodArguments(pjp, newHttpEntity);
+		return pjp.proceed(newArgs.toArray());
+	}
 
-    @SuppressWarnings("unchecked")
-    private HttpEntity createNewHttpEntity(HttpEntity httpEntity, String correlationId) {
-        HttpHeaders newHttpHeaders = new HttpHeaders();
-        newHttpHeaders.putAll(httpEntity.getHeaders());
-        newHttpHeaders.add(CORRELATION_ID_HEADER, correlationId);
-        return new HttpEntity(httpEntity.getBody(), newHttpHeaders);
-    }
+	@SuppressWarnings("unchecked")
+	private HttpEntity createNewHttpEntity(HttpEntity httpEntity, String correlationId) {
+		HttpHeaders newHttpHeaders = new HttpHeaders();
+		newHttpHeaders.putAll(httpEntity.getHeaders());
+		newHttpHeaders.add(CORRELATION_ID_HEADER, correlationId);
+		return new HttpEntity(httpEntity.getBody(), newHttpHeaders);
+	}
 
-    private List<Object> modifyHttpEntityInMethodArguments(ProceedingJoinPoint pjp, HttpEntity newHttpEntity) {
-        List<Object> newArgs = new ArrayList<>();
-        for (int i = 0; i < pjp.getArgs().length; i++) {
-            Object arg = pjp.getArgs()[i];
-            if (i != HTTP_ENTITY_PARAM_INDEX) {
-                newArgs.add(i, arg);
-            } else {
-                newArgs.add(i, newHttpEntity);
-            }
-        }
-        return newArgs;
-    }
+	private List<Object> modifyHttpEntityInMethodArguments(ProceedingJoinPoint pjp, HttpEntity newHttpEntity) {
+		List<Object> newArgs = new ArrayList<>();
+		for (int i = 0; i < pjp.getArgs().length; i++) {
+			Object arg = pjp.getArgs()[i];
+			if (i != HTTP_ENTITY_PARAM_INDEX) {
+				newArgs.add(i, arg);
+			} else {
+				newArgs.add(i, newHttpEntity);
+			}
+		}
+		return newArgs;
+	}
 }
