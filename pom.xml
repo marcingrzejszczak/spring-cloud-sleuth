@@ -4,7 +4,6 @@
 		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<groupId>org.springframework.cloud</groupId>
 	<artifactId>spring-cloud-sleuth</artifactId>
 	<version>1.0.0.BUILD-SNAPSHOT</version>
 	<packaging>pom</packaging>
@@ -27,6 +26,8 @@
 	</scm>
 
 	<modules>
+		<module>spring-cloud-sleuth-core</module>
+		<module>spring-cloud-sleuth-correlation</module>
 		<module>spring-cloud-sleuth-zipkin</module>
 		<module>spring-cloud-sleuth-sample</module>
 		<module>docs</module>
@@ -74,8 +75,13 @@
 		<dependencies>
 			<dependency>
 				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-sleuth-core</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
 				<artifactId>spring-cloud-sleuth-zipkin</artifactId>
-				<version>1.0.0.BUILD-SNAPSHOT</version>
+				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>com.github.kristofa</groupId>
@@ -124,6 +130,16 @@
 				<version>18.0</version>
 			</dependency>
 			<dependency>
+				<groupId>commons-lang</groupId>
+				<artifactId>commons-lang</artifactId>
+				<version>2.5</version>
+			</dependency>
+			<dependency>
+				<groupId>io.reactivex</groupId>
+				<artifactId>rxjava</artifactId>
+				<version>1.0.10</version>
+			</dependency>
+			<dependency>
 				<groupId>org.springframework.cloud</groupId>
 				<artifactId>spring-cloud-starter-zuul</artifactId>
 				<version>${spring-cloud.version}</version>
@@ -136,9 +152,9 @@
 				<scope>provided</scope>
 			</dependency>
 			<dependency>
-				<groupId>org.springframework.cloud</groupId>
-				<artifactId>spring-cloud-starter-hystrix</artifactId>
-				<version>${spring-cloud.version}</version>
+				<groupId>com.netflix.hystrix</groupId>
+				<artifactId>hystrix-core</artifactId>
+				<version>1.4.5</version>
 			</dependency>
 			<dependency>
 				<groupId>org.aspectj</groupId>

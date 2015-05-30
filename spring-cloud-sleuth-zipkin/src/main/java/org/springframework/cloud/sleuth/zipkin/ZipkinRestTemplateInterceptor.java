@@ -1,20 +1,15 @@
 package org.springframework.cloud.sleuth.zipkin;
 
-import com.github.kristofa.brave.BraveHttpHeaders;
-import com.github.kristofa.brave.ClientRequestAdapter;
 import com.github.kristofa.brave.ClientResponseAdapter;
 import com.github.kristofa.brave.client.ClientRequestInterceptor;
 import com.github.kristofa.brave.client.ClientResponseInterceptor;
-import com.google.common.base.Optional;
 import lombok.SneakyThrows;
-import org.springframework.cloud.sleuth.zipkin.web.correlationId.CorrelationIdHolder;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.ClientHttpResponse;
 
 import java.io.IOException;
-import java.net.URI;
 
 /**
  * @author Spencer Gibb
@@ -34,10 +29,8 @@ public class ZipkinRestTemplateInterceptor implements ClientHttpRequestIntercept
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException {
 
-        RequestAdapter requestAdapter = new RequestAdapter(request);
+        /*RequestAdapter requestAdapter = new RequestAdapter(request);
         clientRequestInterceptor.handle(requestAdapter, Optional.<String>absent());
-
-        appendCorrelationIdToRequestIfMissing(request, requestAdapter);
 
         ClientHttpResponse response = null;
         Exception exception = null;
@@ -51,16 +44,11 @@ public class ZipkinRestTemplateInterceptor implements ClientHttpRequestIntercept
         if(exception != null) {
             throw exception;
         }
-        return response;
+        return response;*/
+        return null;
     }
 
-    private void appendCorrelationIdToRequestIfMissing(HttpRequest request, RequestAdapter requestAdapter) {
-        if (!request.getHeaders().containsKey(CorrelationIdHolder.CORRELATION_ID_HEADER)) {
-            requestAdapter.addHeader(CorrelationIdHolder.CORRELATION_ID_HEADER, CorrelationIdHolder.get());
-        }
-    }
-
-    class RequestAdapter implements ClientRequestAdapter {
+    /*class RequestAdapter implements ClientRequestAdapter {
 
         HttpRequest request;
 
@@ -88,7 +76,7 @@ public class ZipkinRestTemplateInterceptor implements ClientHttpRequestIntercept
         public void addHeader(String header, String value) {
             request.getHeaders().add(header, value);
         }
-    }
+    }*/
 
     class ResponseAdapter implements ClientResponseAdapter {
         ClientHttpResponse response;

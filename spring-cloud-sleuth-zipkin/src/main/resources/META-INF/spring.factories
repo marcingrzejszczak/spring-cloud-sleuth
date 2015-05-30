@@ -1,5 +1,4 @@
 # Auto Configuration
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
 org.springframework.cloud.sleuth.zipkin.ZipkinAutoConfiguration,\
-org.springframework.cloud.sleuth.zipkin.web.ZipkinWebAutoConfiguration,\
-org.springframework.cloud.sleuth.zipkin.web.correlationId.CorrelationIdAutoConfiguration
+org.springframework.cloud.sleuth.zipkin.web.ZipkinWebAutoConfiguration
