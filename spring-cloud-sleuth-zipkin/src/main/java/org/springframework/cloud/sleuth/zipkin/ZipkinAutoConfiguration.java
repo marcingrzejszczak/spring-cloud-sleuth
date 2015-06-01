@@ -14,6 +14,7 @@ import com.github.kristofa.brave.client.ClientRequestInterceptor;
 import com.github.kristofa.brave.client.ClientResponseInterceptor;
 import com.github.kristofa.brave.client.spanfilter.SpanNameFilter;
 import com.github.kristofa.brave.zipkin.ZipkinSpanCollector;
+import com.google.common.base.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -72,9 +73,8 @@ public class ZipkinAutoConfiguration {
 		@Bean
 		@ConditionalOnMissingBean
 		public ClientRequestInterceptor clientRequestInterceptor() {
-			/*return new ClientRequestInterceptor(clientTracer,
-					Optional.fromNullable(spanNameFilter));*/
-			return null;
+			return new ClientRequestInterceptor(clientTracer,
+					Optional.fromNullable(spanNameFilter));
 		}
 
 		@Bean

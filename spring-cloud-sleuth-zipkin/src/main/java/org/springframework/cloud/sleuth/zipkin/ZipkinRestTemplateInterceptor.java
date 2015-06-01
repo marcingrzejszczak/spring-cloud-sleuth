@@ -1,8 +1,11 @@
 package org.springframework.cloud.sleuth.zipkin;
 
+import com.github.kristofa.brave.BraveHttpHeaders;
+import com.github.kristofa.brave.ClientRequestAdapter;
 import com.github.kristofa.brave.ClientResponseAdapter;
 import com.github.kristofa.brave.client.ClientRequestInterceptor;
 import com.github.kristofa.brave.client.ClientResponseInterceptor;
+import com.google.common.base.Optional;
 import lombok.SneakyThrows;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
@@ -29,7 +32,7 @@ public class ZipkinRestTemplateInterceptor implements ClientHttpRequestIntercept
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException {
 
-        /*RequestAdapter requestAdapter = new RequestAdapter(request);
+        RequestAdapter requestAdapter = new RequestAdapter(request);
         clientRequestInterceptor.handle(requestAdapter, Optional.<String>absent());
 
         ClientHttpResponse response = null;
@@ -44,11 +47,10 @@ public class ZipkinRestTemplateInterceptor implements ClientHttpRequestIntercept
         if(exception != null) {
             throw exception;
         }
-        return response;*/
-        return null;
+        return response;
     }
 
-    /*class RequestAdapter implements ClientRequestAdapter {
+    class RequestAdapter implements ClientRequestAdapter {
 
         HttpRequest request;
 
@@ -76,7 +78,7 @@ public class ZipkinRestTemplateInterceptor implements ClientHttpRequestIntercept
         public void addHeader(String header, String value) {
             request.getHeaders().add(header, value);
         }
-    }*/
+    }
 
     class ResponseAdapter implements ClientResponseAdapter {
         ClientHttpResponse response;

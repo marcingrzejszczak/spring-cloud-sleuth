@@ -34,10 +34,10 @@ public class ZipkinWebAutoConfiguration {
 	@Autowired
 	private ServerTracer serverTracer;
 
-	/*@Bean
+	@Bean
 	public ZipkinHandlerInterceptor zipkinHandlerInterceptor() {
 		return new ZipkinHandlerInterceptor(httpServletRequestInterceptor());
-	}*/
+	}
 
     @Bean
     public ZipkinFilter zipkinFilter() {

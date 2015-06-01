@@ -39,14 +39,10 @@ public class CorrelationIdSettingRestTemplateInterceptor implements ClientHttpRe
 	public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException {
 		appendCorrelationIdToRequestIfMissing(request);
 		ClientHttpResponse response = null;
-		Exception exception = null;
 		try {
 			response = execution.execute(request, body);
 		} catch (final Exception e) {
-			exception = e;
-		}
-		if (exception != null) {
-			throw exception;
+			throw new RuntimeException(e);
 		}
 		return response;
 	}

@@ -208,7 +208,7 @@
 
 	<properties>
 		<brave.version>2.4.2</brave.version>
-		<spring-cloud.version>1.0.1.RELEASE</spring-cloud.version>
+		<spring-cloud.version>1.0.1.BUILD-SNAPSHOT</spring-cloud.version>
 		<aspectj.version>1.8.4</aspectj.version>
 		<spock.version>1.0-groovy-2.4</spock.version>
 	</properties>
