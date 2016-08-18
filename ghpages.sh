@@ -1,108 +1,235 @@
 #!/bin/bash -x
 
-#git remote set-url --push origin `git config remote.origin.url | sed -e 's/^git:/https:/'`
+set -e
 
-if ! (git remote set-branches --add origin gh-pages && git fetch -q); then
-    echo "No gh-pages, so not syncing"
-    exit 0
-fi
+# Set default props like MAVEN_PATH, ROOT_FOLDER etc.
+function set_default_props() {
+    # The script should be executed from the root folder
+    ROOT_FOLDER=`pwd`
+    echo "Current folder is ${ROOT_FOLDER}"
 
-if ! [ -d docs/target/generated-docs ]; then
-    echo "No gh-pages sources in docs/target/generated-docs, so not syncing"
-    exit 0
-fi
+    if [[ ! -e "${ROOT_FOLDER}/.git" ]]; then
+        echo "You're not in the root folder of the project!"
+        exit 1
+    fi
 
-# The script should be executed from the root folder
+    # Prop that will let commit the changes
+    COMMIT_CHANGES="no"
+    MAVEN_PATH=${MAVEN_PATH:-}
+    echo "Path to Maven is [${MAVEN_PATH}]"
+}
 
-ROOT_FOLDER=`pwd`
-echo "Current folder is ${ROOT_FOLDER}"
+# Check if gh-pages exists and docs have been built
+function check_if_anything_to_sync() {
+    git remote set-url --push origin `git config remote.origin.url | sed -e 's/^git:/https:/'`
 
-if [[ ! -e "${ROOT_FOLDER}/.git" ]]; then
-    echo "You're not in the root folder of the project!"
-    exit 1
-fi
+    if ! (git remote set-branches --add origin gh-pages && git fetch -q); then
+        echo "No gh-pages, so not syncing"
+        exit 0
+    fi
 
-# Retrieve version number, name of the main adoc and name of the current branch
-###################################################################
+    if ! [ -d docs/target/generated-docs ]; then
+        echo "No gh-pages sources in docs/target/generated-docs, so not syncing"
+        exit 0
+    fi
+}
 
-# Code grepping for the 1st presence of "version>" in pom.xml.
-# First one is project version, second parent version.
-VERSION_NODE=`awk '/version>/{i++}i==1{print; exit}' $ROOT_FOLDER/pom.xml`
-# Extract the contents of the version node
-VERSION_VALUE=$(sed -ne '/version/{s/.*<version>\(.*\)<\/version>.*/\1/p;q;}' <<< "$VERSION_NODE")
-echo "Extracted version from root pom.xml is [${VERSION_VALUE}]"
+function retrieve_current_branch() {
+    # Code getting the name of the current branch. For master we want to publish as we did until now
+    # http://stackoverflow.com/questions/1593051/how-to-programmatically-determine-the-current-checked-out-git-branch
+    # If there is a branch already passed will reuse it - otherwise will try to find it
+    CURRENT_BRANCH=${BRANCH}
+    if [[ -z "${CURRENT_BRANCH}" ]] ; then
+      CURRENT_BRANCH=$(git symbolic-ref -q HEAD)
+      CURRENT_BRANCH=${CURRENT_BRANCH##refs/heads/}
+      CURRENT_BRANCH=${CURRENT_BRANCH:-HEAD}
+    fi
+    echo "Current branch is [${CURRENT_BRANCH}]"
+    git checkout ${CURRENT_BRANCH}
 
-# Code grepping for the 2nd presence of "version>" in pom.xml.
-# First one is parent, second project version.
-MAIN_ADOC_NODE=`awk '/docs.main/{i++}i==1{print; exit}' $ROOT_FOLDER/docs/pom.xml`
-# Extract the contents of the version node
-MAIN_ADOC_VALUE=$(sed -ne '/docs.main/{s/.*<docs.main>\(.*\)<\/docs.main>.*/\1/p;q;}' <<< "$MAIN_ADOC_NODE")
-echo "Extracted version from docs pom.xml is [${MAIN_ADOC_VALUE}]"
+}
 
-# Code getting the name of the current branch. For master we want to publish as we did until now
-# http://stackoverflow.com/questions/1593051/how-to-programmatically-determine-the-current-checked-out-git-branch
-CURRENT_BRANCH=$(git symbolic-ref -q HEAD)
-CURRENT_BRANCH=${CURRENT_BRANCH##refs/heads/}
-CURRENT_BRANCH=${CURRENT_BRANCH:-HEAD}
-echo "Current branch is [${CURRENT_BRANCH}]"
+# Get the name of the `docs.main` property
+# Get whitelisted branches - assumes that a `docs` module is available under `docs` profile
+function retrieve_doc_properties() {
+    MAIN_ADOC_VALUE=$("${MAVEN_PATH}"mvn -q \
+        -Dexec.executable="echo" \
+        -Dexec.args='${docs.main}' \
+        --non-recursive \
+        org.codehaus.mojo:exec-maven-plugin:1.3.1:exec)
+    echo "Extracted 'main.adoc' from Maven build [${MAIN_ADOC_VALUE}]"
+
+
+    WHITELIST_PROPERTY=${WHITELIST_PROPERTY:-"docs.whitelisted.branches"}
+    WHITELISTED_BRANCHES_VALUE=$("${MAVEN_PATH}"mvn -q \
+        -Dexec.executable="echo" \
+        -Dexec.args="\${${WHITELIST_PROPERTY}}" \
+        org.codehaus.mojo:exec-maven-plugin:1.3.1:exec \
+        -P docs \
+        -pl docs)
+    echo "Extracted '${WHITELIST_PROPERTY}' from Maven build [${WHITELISTED_BRANCHES_VALUE}]"
+}
 
 # Stash any outstanding changes
-###################################################################
-git diff-index --quiet HEAD
-dirty=$?
-if [ "$dirty" != "0" ]; then git stash; fi
+function stash_changes() {
+    git diff-index --quiet HEAD && dirty=$? || (echo "Failed to check if the current repo is dirty. Assuming that it is." && dirty="1")
+    if [ "$dirty" != "0" ]; then git stash; fi
+}
 
-# Switch to gh-pages branch to sync it with master
-###################################################################
-git checkout gh-pages
-git pull origin gh-pages
+# Switch to gh-pages branch to sync it with current branch
+function add_docs_from_target() {
+    local DESTINATION_REPO_FOLDER
+    if [[ -z "${DESTINATION}" ]] ; then
+        DESTINATION_REPO_FOLDER=${ROOT_FOLDER}
+    else
+        DESTINATION_REPO_FOLDER=${DESTINATION}
+    fi
+    cd ${DESTINATION_REPO_FOLDER}
+    git checkout gh-pages
+    git pull origin gh-pages
 
-# Add git branches
-###################################################################
-mkdir -p ${ROOT_FOLDER}/${VERSION_VALUE}
-if [[ "${CURRENT_BRANCH}" == "master" ]] ; then
-    echo -e "Current branch is master - will copy the current docs also to [${VERSION_VALUE}] folder"
-    for f in docs/target/generated-docs/*; do
-        file=${f#docs/target/generated-docs/*}
-        if ! git ls-files -i -o --exclude-standard --directory | grep -q ^$file$; then
-            # Not ignored...
-            cp -rf $f ${ROOT_FOLDER}/
-            cp -rf $f ${ROOT_FOLDER}/${VERSION_VALUE}
-            # We want users to access 1.0.0.RELEASE/ instead of 1.0.0.RELEASE/spring-cloud.sleuth.html
-            if [[ "${file}" == "${MAIN_ADOC_VALUE}" ]] ; then
-                ln -s ${ROOT_FOLDER}/${VERSION_VALUE}/index.html ${ROOT_FOLDER}/${VERSION_VALUE}/${MAIN_ADOC_VALUE}.adoc
-                git add -A ${ROOT_FOLDER}/${VERSION_VALUE}/index.html
+    # Add git branches
+    ###################################################################
+    mkdir -p ${DESTINATION_REPO_FOLDER}/${CURRENT_BRANCH}
+    if [[ "${CURRENT_BRANCH}" == "master" ]] ; then
+        echo -e "Current branch is master - will copy the current docs only to the root folder"
+        for f in ${ROOT_FOLDER}/docs/target/generated-docs/*; do
+            file=${f#docs/target/generated-docs/*}
+            if ! git ls-files -i -o --exclude-standard --directory | grep -q ^${file}$; then
+                # Not ignored...
+                cp -rf $f ${ROOT_FOLDER}/
+                git add -A ${DESTINATION_REPO_FOLDER}/$file
             fi
-            git add -A $file
-            git add -A ${ROOT_FOLDER}/${VERSION_VALUE}/$file
+        done
+        COMMIT_CHANGES="yes"
+    else
+        echo -e "Current branch is [${CURRENT_BRANCH}]"
+        # http://stackoverflow.com/questions/29300806/a-bash-script-to-check-if-a-string-is-present-in-a-comma-separated-list-of-strin
+        if [[ ",${WHITELISTED_BRANCHES_VALUE}," = *",${CURRENT_BRANCH},"* ]] ; then
+            echo -e "Branch [${CURRENT_BRANCH}] is whitelisted! Will copy the current docs to the [${CURRENT_BRANCH}] folder"
+            for f in ${ROOT_FOLDER}/docs/target/generated-docs/*; do
+                file=${f#${ROOT_FOLDER}/docs/target/generated-docs/*}
+                copy_docs_for_branch ${file} ${DESTINATION_REPO_FOLDER}
+            done
+            COMMIT_CHANGES="yes"
+        else
+            echo "Branch [${CURRENT_BRANCH}] is not on the white list! Check out the Maven [${WHITELIST_PROPERTY}] property in
+             [docs] module available under [docs] profile. Will not commit any changes to gh-pages for this branch."
         fi
-    done
-else
-    echo -e "Current branch is [${CURRENT_BRANCH}] - will copy the current docs ONLY to [${VERSION_VALUE}] folder"
-    for f in docs/target/generated-docs/*; do
-        file=${f#docs/target/generated-docs/*}
-        if ! git ls-files -i -o --exclude-standard --directory | grep -q ^$file$; then
-            # Not ignored...
-            cp -rf $f ${ROOT_FOLDER}/${VERSION_VALUE}
-            if [[ "${file}" == "${MAIN_ADOC_VALUE}" ]] ; then
-                ln -s ${ROOT_FOLDER}/${VERSION_VALUE}/index.html ${ROOT_FOLDER}/${VERSION_VALUE}/${MAIN_ADOC_VALUE}.adoc
-                git add -A ${ROOT_FOLDER}/${VERSION_VALUE}/index.html
-            fi
-            git add -A ${ROOT_FOLDER}/${VERSION_VALUE}/$file
+    fi
+    commit_changes_if_applicable
+}
+
+# Copies the docs from target to the provided destination
+# Params:
+# $1 - file from target
+# $2 - destination to which copy the files
+function copy_docs_for_branch() {
+    local file=$1
+    local destination=$2
+    if ! git ls-files -i -o --exclude-standard --directory | grep -q ^${file}$; then
+        # Not ignored...
+        # We want users to access 1.0.0.RELEASE/ instead of 1.0.0.RELEASE/spring-cloud.sleuth.html
+        if [[ "${file}" == "${MAIN_ADOC_VALUE}.html" ]] ; then
+            # We don't want to copy the spring-cloud-sleuth.html
+            # we want it to be converted to index.html
+            cp -rf $f ${destination}/index.html
+            git add -A ${destination}/index.html
+        else
+            cp -rf $f ${destination}
+            git add -A ${destination}/$file
         fi
-    done
-fi
+    fi
+}
 
-git commit -a -m "Sync docs from ${CURRENT_BRANCH} to gh-pages"
+function commit_changes_if_applicable() {
+    if [[ "${COMMIT_CHANGES}" == "yes" ]] ; then
+        COMMIT_SUCCESSFUL="no"
+        git commit -a -m "Sync docs from ${CURRENT_BRANCH} to gh-pages" && COMMIT_SUCCESSFUL="yes" || echo "Failed to commit changes"
 
-# Uncomment the following push if you want to auto push to
-# the gh-pages branch whenever you commit to master locally.
-# This is a little extreme. Use with care!
-###################################################################
-git push origin gh-pages
+        # Uncomment the following push if you want to auto push to
+        # the gh-pages branch whenever you commit to master locally.
+        # This is a little extreme. Use with care!
+        ###################################################################
+        if [[ "${COMMIT_SUCCESSFUL}" == "yes" ]] ; then
+            git push origin gh-pages
+        fi
+    fi
+}
 
-# Finally, switch back to the master branch and exit block
-git checkout ${CURRENT_BRANCH}
-if [ "$dirty" != "0" ]; then git stash pop; fi
+# Switch back to the previous branch and exit block
+function checkout_previous_branch() {
+    git checkout ${CURRENT_BRANCH}
+    if [ "$dirty" != "0" ]; then git stash pop; fi
 
-exit 0
+    exit 0
+}
+
+# Prints the usage
+function print_usage() {
+cat <<EOF
+The idea of this script is to update gh-pages branch with the generated docs. Without any options
+the script will work in the following manner:
+
+- if there's no gh-pages / target for docs module then the script ends
+- for master branch the generated docs are copied to the root of gh-pages branch
+- for any other branch (if that branch is whitelisted) a subfolder with branch name is created
+    and docs are copied there
+- if the version switch is passed (-v) then a tag with (v) prefix will be retrieved and a folder
+    with that version number will be created in the gh-pages branch. WARNING! No whitelist verification will take place
+- if the destination switch is passed (-d) then the script will check if the provided dir is a git repo and then will
+    switch to gh-pages of that repo and copy the generated docs to `docs/<project-name>/<version>`
+
+USAGE:
+
+You can use the following options:
+
+-v|--version        - the script will apply the whole procedure for a particular library version
+-d|--destination    - the root of destination folder where the docs should be copied. E.g. point to spring-cloud-static folder
+
+EOF
+}
+
+
+# ==========================================
+#    ____   ____ _____  _____ _____ _______
+#  / ____|/ ____|  __ \|_   _|  __ \__   __|
+# | (___ | |    | |__) | | | | |__) | | |
+#  \___ \| |    |  _  /  | | |  ___/  | |
+#  ____) | |____| | \ \ _| |_| |      | |
+# |_____/ \_____|_|  \_\_____|_|      |_|
+#
+# ==========================================
+
+while [[ $# > 0 ]]
+do
+key="$1"
+case ${key} in
+    -v|--version)
+    VERSION="$2"
+    shift # past argument
+    ;;
+    -d|--destination)
+    DESTINATION="$2"
+    shift # past argument
+    ;;
+    -h|--help)
+    print_usage
+    exit 0
+    ;;
+    *)
+    echo "Invalid option: [$1]"
+    print_usage
+    exit 1
+    ;;
+esac
+shift # past argument or value
+done
+
+set_default_props
+check_if_anything_to_sync
+retrieve_current_branch
+retrieve_doc_properties
+stash_changes
+add_docs_from_target
+checkout_previous_branch
